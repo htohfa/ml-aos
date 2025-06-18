@@ -5,8 +5,12 @@ from torch.utils.data import Dataset
 from typing import Any, Dict
 from glob import glob
 
+from google.colab import drive
+drive.mount('/content/drive')
+input_dir = '/content/drive/My Drive/rubin_aos_batoid_sims 2'
+
 # Your existing load_data function
-def load_data(path: str = "./data", chunks: int = 100):
+def load_data(path: str = '/content/drive/My Drive/rubin_aos_batoid_sims 2', chunks: int = 100):
     """Load the table of batoid simulations.
     
     Parameters
