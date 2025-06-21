@@ -6,8 +6,8 @@ from typing import Any, Dict
 
 from ml_aos.utils import transform_inputs
 import sys
-sys.path.append('/content/ml-aos')
-from load_data import load_data
+#sys.path.append('/content/ml-aos')
+from ml_aos.load_data import load_data
 
 
 class Donuts(Dataset):
