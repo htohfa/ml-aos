@@ -2,7 +2,7 @@
 from glob import glob
 import pandas as pd
 
-def load_data(path: str = "./data", chunks:int=100):
+def load_data(path: str = "/content/drive/My Drive/rubin_aos_batoid_sims 2/data", chunks:int=100):
     """Load the table of batoid simulations.
     
     Parameters
