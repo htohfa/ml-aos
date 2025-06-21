@@ -121,7 +121,7 @@ class Donuts(Dataset):
             # If image is already an array
             img = np.array(img)
         
-        # Crop out the central 160x160 (assuming original is 170x170 based on your config)
+        # Crop out the central 160x160 (assuming original is 170x170 based on config)
         if img.shape[0] > 160:
             crop_size = (img.shape[0] - 160) // 2
             img = img[crop_size:-crop_size, crop_size:-crop_size]
@@ -137,8 +137,7 @@ class Donuts(Dataset):
         band_str = row['filter']
         band = "ugrizy".index(band_str)
 
-        # Get zernikes - assuming they're in columns or can be extracted
-        # You might need to adjust this based on how zernikes are stored in your data
+       
         if 'zernikes' in row:
             zernikes = np.array(row['zernikes'])
         else:
