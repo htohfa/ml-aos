@@ -1,4 +1,3 @@
-
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -112,16 +111,10 @@ class Donuts(Dataset):
         # Get the row for this index
         row = self.mode_data.iloc[idx]
         
-        # Get the image - assuming it's stored in the 'image' column
-        img = row['image']
-        if isinstance(img, str):
-            # If image is a file path, load it
-            img = np.load(img)
-        else:
-            # If image is already an array
-            img = np.array(img)
+        # Get the image - it's already a numpy array
+        img = np.array(row['image'])
         
-        # Crop out the central 160x160 (assuming original is 170x170 based on config)
+        # Crop out the central 160x160 if needed
         if img.shape[0] > 160:
             crop_size = (img.shape[0] - 160) // 2
             img = img[crop_size:-crop_size, crop_size:-crop_size]
@@ -130,36 +123,18 @@ class Donuts(Dataset):
         fx = float(row['fx'])
         fy = float(row['fy'])
 
-        # Get the intra/extra flag
+        # Get the intra/extra flag - it's already a boolean
         intra = bool(row['intra'])
 
-        # Get the observed band - convert filter name to index
-        band_str = row['filter']
+        # Get the observed band - convert filter string to index
+        band_str = str(row['filter'])
         band = "ugrizy".index(band_str)
 
-       
-        if 'zernikes' in row:
-            zernikes = np.array(row['zernikes'])
-        else:
-            # If zernikes are in separate columns, collect them
-            zernike_cols = [col for col in self.mode_data.columns if 'zernike' in col.lower()]
-            if zernike_cols:
-                zernikes = np.array([row[col] for col in zernike_cols])
-            else:
-                # Default to zeros if no zernikes found
-                zernikes = np.zeros(18)  # Zernikes 4-21 inclusive
+        # Get zernikes - they're already in the data
+        zernikes = np.array(row['zernikes'])
 
-        # Get degrees of freedom
-        if 'dof' in row:
-            dof = np.array(row['dof'])
-        else:
-            # If dof are in separate columns, collect them
-            dof_cols = [col for col in self.mode_data.columns if 'dof' in col.lower()]
-            if dof_cols:
-                dof = np.array([row[col] for col in dof_cols])
-            else:
-                # Default to zeros if no dof found
-                dof = np.zeros(50)  # Adjust size as needed
+        # Get degrees of freedom - they're already in the data
+        dof = np.array(row['dof'])
 
         # Get IDs
         pntId = int(row['pntId'])
