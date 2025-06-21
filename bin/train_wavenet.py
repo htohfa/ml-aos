@@ -27,7 +27,7 @@ trainer = pl.Trainer(
     deterministic=True,
     precision="16-mixed",
     devices=1,
-    accelerator="gpu",
+    accelerator="cpu",
     callbacks=[
         early_stopping,
         val_checkpoint,
