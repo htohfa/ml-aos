@@ -19,7 +19,7 @@ class DonutLoader(pl.LightningDataModule):
     def __init__(
         self,
         batch_size: int = 64,
-        num_workers: int = 16,
+        num_workers: int = 2,
         persistent_workers: bool = True,
         pin_memory: bool = True,
         shuffle: bool = True,
