@@ -5,7 +5,9 @@ from torch.utils.data import Dataset
 from typing import Any, Dict
 
 from ml_aos.utils import transform_inputs
-from load_data import load_data  # Import your load_data function
+import sys
+sys.path.append('/content/ml-aos')
+from load_data import load_data
 
 
 class Donuts(Dataset):
