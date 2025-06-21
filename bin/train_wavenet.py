@@ -11,7 +11,7 @@ val_checkpoint = pl.callbacks.ModelCheckpoint(monitor="val_loss")
 lr_monitor = pl.callbacks.LearningRateMonitor()
 
 # seed everything so we're deterministic
-pl.seed_everything(42, workers=True)
+pl.seed_everything(42, workers=False)
 
 # create the model, dataloader, and trainer
 model = WaveNetSystem(
