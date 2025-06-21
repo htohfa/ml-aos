@@ -1,5 +1,7 @@
 """Train the WaveNet."""
 import pytorch_lightning as pl
+import sys
+sys.path.append('/content/ml-aos')
 
 from ml_aos.lightning import DonutLoader, WaveNetSystem
 
