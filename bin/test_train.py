@@ -4,6 +4,8 @@ import sys
 sys.path.append('/content/ml-aos')
 from ml_aos.lightning import DonutLoader, WaveNetSystem
 from ml_aos.utils import printOnce
+import torch
+torch.set_float32_matmul_precision('medium')
 
 
 # first we will do a fast dev run to make sure no errors are thrown
