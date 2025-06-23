@@ -3,6 +3,8 @@ import pytorch_lightning as pl
 
 from ml_aos.lightning import DonutLoader, WaveNetSystem
 from ml_aos.utils import printOnce
+import sys
+sys.path.append('/content/ml-aos')
 
 # first we will do a fast dev run to make sure no errors are thrown
 printOnce("fast dev run", header=True)
