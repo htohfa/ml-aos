@@ -9,7 +9,7 @@ from ml_aos.utils import printOnce
 # first we will do a fast dev run to make sure no errors are thrown
 printOnce("fast dev run", header=True)
 pl.seed_everything(42, workers=True)
-trainer = pl.Trainer(fast_dev_run=True, deterministic=True)
+trainer = pl.Trainer(fast_dev_run=False, deterministic=True)
 trainer.fit(model=WaveNetSystem(), train_dataloaders=DonutLoader(shuffle=False))
 
 # next we will overfit a single batch
