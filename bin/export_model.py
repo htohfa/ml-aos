@@ -4,7 +4,8 @@ from zoneinfo import ZoneInfo
 
 import click
 import torch
-
+import sys
+sys.path.append('/content/ml-aos')
 from ml_aos.lightning import WaveNetSystem
 from ml_aos.utils import get_root
 
