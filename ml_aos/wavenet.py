@@ -84,6 +84,14 @@ class WaveNet(nn.Module):
 
         return image
 
+    def predict_image_feature(self ,
+        image: torch.Tensor):
+        image = self._reshape_image(image)
+
+        # use cnn to extract image features
+        cnn_features = self.cnn(image)
+        return image, cnn_features
+
     def forward(
         self,
         image: torch.Tensor,
@@ -112,13 +120,10 @@ class WaveNet(nn.Module):
         torch.Tensor
             Array of Zernike coefficients (Noll indices 4-23; microns)
         """
-        # reshape the image
-        image = self._reshape_image(image)
-
-        # use cnn to extract image features
-        cnn_features = self.cnn(image)
+    
 
         # predict zernikes from all features
+        image, cnn_features = self.predict_image_feature(image)
         features = torch.cat([cnn_features, fx, fy, intra, band], dim=1)
         zernikes = self.predictor(features)
 
