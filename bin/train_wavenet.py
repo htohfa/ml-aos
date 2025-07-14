@@ -23,16 +23,24 @@ model = WaveNetSystem(
 
 data_loader = DonutLoader()
 
+tb_logger = pl.loggers.TensorBoardLogger(
+    save_dir="lightning_logs",  # Directory where logs will be saved
+    name="wavenet_experiment",  
+    version=None,  
+    log_graph=True  # Log the model graph
+)
+
 trainer = pl.Trainer(
     deterministic=True,
     precision="16-mixed",
     devices=1,
     accelerator="gpu",
+    logger=tb_logger, 
     callbacks=[
         early_stopping,
         val_checkpoint,
         lr_monitor,
-        tensorboard_callback
+
     ],
     log_every_n_steps=50,
     max_epochs=-1,
