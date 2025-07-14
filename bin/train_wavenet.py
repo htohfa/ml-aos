@@ -32,6 +32,7 @@ trainer = pl.Trainer(
         early_stopping,
         val_checkpoint,
         lr_monitor,
+        tensorboard_callback
     ],
     log_every_n_steps=50,
     max_epochs=-1,
