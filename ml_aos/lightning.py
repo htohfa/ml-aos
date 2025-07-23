@@ -150,6 +150,10 @@ class WaveNetSystem(pl.LightningModule):
         zk_pred = convert_zernikes(zk_pred)
         zk_true = convert_zernikes(zk_true)
 
+        mask = ~torch.isnan(zk_true)
+        zk_pred = zk_pred[mask]
+        zk_true = zk_true[mask]
+
         # pull out the weights from the final linear layer
         *_, A, _ = self.wavenet.predictor.parameters()
 
