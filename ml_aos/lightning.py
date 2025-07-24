@@ -255,3 +255,47 @@ class WaveNetSystem(pl.LightningModule):
         zk_pred *= 1_000
 
         return zk_pred
+
+
+class RealDonutLoader(pl.LightningDataModule):
+    """PyTorch Lightning wrapper for the real LSST AOS data."""
+
+    def __init__(
+        self,
+        batch_size: int = 64,
+        num_workers: int = 4,
+        persistent_workers: bool = True,
+        pin_memory: bool = True,
+        shuffle: bool = True,
+        **kwargs: Any,
+    ) -> None:
+        """Load the real LSST AOS data."""
+        super().__init__()
+        self.save_hyperparameters()
+
+    def _build_loader(
+        self, mode: str, shuffle: bool = False, drop_last: bool = True
+    ) -> DataLoader:
+        """Build a DataLoader"""
+        from ml_aos.real_data_loader import RealDonuts
+        return DataLoader(
+            RealDonuts(mode=mode, **self.hparams),
+            batch_size=self.hparams.batch_size,
+            num_workers=self.hparams.num_workers,
+            persistent_workers=self.hparams.persistent_workers,
+            pin_memory=self.hparams.pin_memory,
+            shuffle=shuffle,
+            drop_last=drop_last,
+        )
+
+    def train_dataloader(self) -> DataLoader:
+        """Return the training DataLoader."""
+        return self._build_loader("train", shuffle=self.hparams.shuffle)
+
+    def val_dataloader(self) -> DataLoader:
+        """Return the validation DataLoader."""
+        return self._build_loader("val", drop_last=False)
+
+    def test_dataloader(self) -> DataLoader:
+        """Return the testing DataLoader."""
+        return self._build_loader("test", drop_last=False)
