@@ -3,7 +3,7 @@ import pytorch_lightning as pl
 import sys
 sys.path.append('/content/ml-aos')
 
-from ml_aos.lightning import DonutLoader, WaveNetSystem
+from ml_aos.lightning import DonutLoader, RealDonutLoader, WaveNetSystem
 
 # create callbacks
 early_stopping = pl.callbacks.EarlyStopping("val_loss", patience=20)
