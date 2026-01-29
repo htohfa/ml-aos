@@ -76,6 +76,9 @@ class WaveNet(nn.Module):
 
         self.predictor = nn.Sequential(*layers)
 
+        # Save Noll Indices for output Zernikes
+        self.nollIndices: list[int] = list(range(4, 23))
+
     def _reshape_image(self, image: torch.Tensor) -> torch.Tensor:
         """Add 3 identical channels to image tensor."""
         # add a channel dimension
@@ -86,12 +89,30 @@ class WaveNet(nn.Module):
 
         return image
 
-    def predict_image_feature(self ,
-        image: torch.Tensor):
+    def predict_image_feature(
+        self,
+        image: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Use the CNN to extract image features.
+
+        Parameters
+        ----------
+        image: torch.Tensor
+            The input image tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            The reshaped image tensor.
+        torch.Tensor
+            The extracted CNN features.
+        """
+        # reshape the image to have 3 channels
         image = self._reshape_image(image)
 
         # use cnn to extract image features
         cnn_features = self.cnn(image)
+
         return image, cnn_features
 
     def forward(
@@ -127,7 +148,7 @@ class WaveNet(nn.Module):
         image, cnn_features = self.predict_image_feature(image)
         features = torch.cat([cnn_features, fx, fy, intra, band], dim=1)
         outputs = self.predictor(features)
-        
+
         # Split output into Zernikes and donut_blur
         zernikes = outputs[:, :21]
         donut_blur = outputs[:, 21:22]
