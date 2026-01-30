@@ -26,27 +26,30 @@ def convert_zernikes(
     # these conversion factors depend on telescope radius and obscuration
     # the numbers below are for the Rubin telescope; different numbers
     # are needed for Auxtel. For calculating these factors, see ts_phosim
+    # Updated for Noll indices: 4-15, 16-19, 22-26 (21 total coefficients)
     arcsec_per_micron = zernikes.new(
         [
-            0.751,  # Z4
+            0.271,  # Z4
             0.271,  # Z5
-            0.271,  # Z6
-            0.819,  # Z7
-            0.819,  # Z8
+            0.822,  # Z6
+            0.822,  # Z7
+            0.396,  # Z8
             0.396,  # Z9
-            0.396,  # Z10
-            1.679,  # Z11
-            0.937,  # Z12
-            0.937,  # Z13
-            0.517,  # Z14
-            0.517,  # Z15
-            1.755,  # Z16
-            1.755,  # Z17
-            1.089,  # Z18
-            1.089,  # Z19
-            0.635,  # Z20
-            0.635,  # Z21
-            2.810,  # Z22
+            1.687,  # Z10
+            0.940,  # Z11
+            0.940,  # Z12
+            0.516,  # Z13
+            0.516,  # Z14
+            1.763,  # Z15
+            1.763,  # Z16
+            1.091,  # Z17
+            1.091,  # Z18
+            0.635,  # Z19
+            1.876,  # Z22
+            1.876,  # Z23 (approximate)
+            1.264,  # Z24 (approximate)
+            1.264,  # Z25 (approximate)
+            0.752,  # Z26 (approximate)
         ]
     )
 
@@ -80,11 +83,15 @@ def plot_zernikes(z_pred: torch.Tensor, z_true: torch.Tensor) -> plt.Figure:
         sharey=True,
     )
 
+    # Note: This function may need updating for 21 Zernikes instead of 19
+    # For now, it will plot the first 8 samples as before
     # loop through the axes/zernikes
     for ax, zt, zp in zip(axes.flatten(), z_true, z_pred):
-        ax.plot(np.arange(4, 23), convert_zernikes(zt), label="True")
-        ax.plot(np.arange(4, 23), convert_zernikes(zp), label="Predicted")
-        ax.set(xticks=np.arange(4, 23, 2))
+        # Updated to handle 21 Zernikes: indices [4-15, 16-19, 22-26]
+        noll_indices = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 23, 24, 25, 26]
+        ax.plot(noll_indices, convert_zernikes(zt), label="True")
+        ax.plot(noll_indices, convert_zernikes(zp), label="Predicted")
+        ax.set(xticks=[4, 6, 8, 10, 12, 14, 16, 18, 22, 24, 26])
 
     axes[0, 0].legend()  # add legend to first panel
 
@@ -214,3 +221,4 @@ def get_root() -> Path:
     root = Path(git.Repo(".", search_parent_directories=True).working_tree_dir)
 
     return root
+
