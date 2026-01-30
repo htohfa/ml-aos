@@ -1,6 +1,4 @@
-"""Wrapping everything for WaveNet in Pytorch Lightning."""
-
-from typing import Any
+"""PyTorch Lightning modules for training WaveNet."""
 
 import pytorch_lightning as pl
 import torch
@@ -8,69 +6,92 @@ import torch.nn.functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
-from ml_aos.dataloader import Donuts
+from ml_aos.real_data_loader import RealDonuts
 from ml_aos.utils import convert_zernikes
 from ml_aos.wavenet import WaveNet
 
 
-class DonutLoader(pl.LightningDataModule):
-    """Pytorch Lightning wrapper for the simulated Donuts DataSet."""
+class RealDonutLoader(pl.LightningDataModule):
+    """DataModule for real commissioning data."""
 
     def __init__(
         self,
-        batch_size: int = 64,
+        data_dir: str = "/astro/store/epyc/ssd/users/htohfa/aos_chunks",
+        batch_size: int = 32,
         num_workers: int = 4,
-        persistent_workers: bool = True,
-        pin_memory: bool = True,
         shuffle: bool = True,
-        **kwargs: Any,
+        filter_low_snr: bool = False,
+        snr_percentile: float = 20.0,
+        random_seed: int = 42,
+        **kwargs,
     ) -> None:
-        """Load the simulated Donuts data.
-
-        Parameters
-        ----------
-        batch_size: int, default=64
-            The batch size for SGD.
-        num_workers: int, default=16
-            The number of workers for parallel loading of batches.
-        persistent_workers: bool, default=True
-            Whether to shutdown worker processes after dataset is consumed once
-        pin_memory: bool, default=True
-            Whether to automatically put data in pinned memory (recommended
-            whenever using a GPU).
-        shuffle: bool, default=True
-            Whether to shuffle the train dataloader.
-        **kwargs
-            See the keyword arguments in the Donuts class.
-        """
+        """Create the RealDonutLoader."""
         super().__init__()
-        self.save_hyperparameters()
+        self.data_dir = data_dir
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.shuffle = shuffle
+        self.filter_low_snr = filter_low_snr
+        self.snr_percentile = snr_percentile
+        self.random_seed = random_seed
+        self.kwargs = kwargs
 
-    def _build_loader(
-        self, mode: str, shuffle: bool = False, drop_last: bool = True
-    ) -> DataLoader:
-        """Build a DataLoader"""
-        return DataLoader(
-            Donuts(mode=mode, **self.hparams),
-            batch_size=self.hparams.batch_size,
-            num_workers=self.hparams.num_workers,
-            persistent_workers=self.hparams.persistent_workers,
-            pin_memory=self.hparams.pin_memory,
-            shuffle=shuffle,
-            drop_last=drop_last,
+    def setup(self, stage=None):
+        """Set up the datasets."""
+        self.train_dataset = RealDonuts(
+            mode="train",
+            data_dir=self.data_dir,
+            filter_low_snr=self.filter_low_snr,
+            snr_percentile=self.snr_percentile,
+            random_seed=self.random_seed,
+            **self.kwargs,
+        )
+        self.val_dataset = RealDonuts(
+            mode="val",
+            data_dir=self.data_dir,
+            filter_low_snr=self.filter_low_snr,
+            snr_percentile=self.snr_percentile,
+            random_seed=self.random_seed,
+            **self.kwargs,
+        )
+        self.test_dataset = RealDonuts(
+            mode="test",
+            data_dir=self.data_dir,
+            filter_low_snr=self.filter_low_snr,
+            snr_percentile=self.snr_percentile,
+            random_seed=self.random_seed,
+            **self.kwargs,
         )
 
     def train_dataloader(self) -> DataLoader:
         """Return the training DataLoader."""
-        return self._build_loader("train", shuffle=self.hparams.shuffle)
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=self.shuffle,
+            drop_last=True,
+        )
 
     def val_dataloader(self) -> DataLoader:
         """Return the validation DataLoader."""
-        return self._build_loader("val", drop_last=False)
+        return DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+            drop_last=False,
+        )
 
     def test_dataloader(self) -> DataLoader:
         """Return the testing DataLoader."""
-        return self._build_loader("test", drop_last=False)
+        return DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+            drop_last=False,
+        )
 
 
 class WaveNetSystem(pl.LightningModule):
@@ -84,6 +105,7 @@ class WaveNetSystem(pl.LightningModule):
         alpha: float = 0,
         lr: float = 1e-3,
         lr_schedule: bool = False,
+        donut_blur_weight: float = 0.1,
     ) -> None:
         """Create the WaveNet.
 
@@ -94,19 +116,21 @@ class WaveNetSystem(pl.LightningModule):
         freeze_cnn: bool, default=False
             Whether to freeze the CNN weights.
         n_predictor_layers: tuple, default=(256)
-            Number of nodes in the hidden layers of the Zernike predictor network.
-            This does not include the output layer, which is fixed to 19.
+            Number of nodes in the hidden layers of the predictor network.
         alpha: float, default=0
             Weight for the L2 penalty.
         lr: float, default=1e-3
             The initial learning rate for Adam.
-        lr_schedule: bool, default=True
+        lr_schedule: bool, default=False
             Whether to use the ReduceLROnPlateau learning rate scheduler.
+        donut_blur_weight: float, default=0.1
+            Weight for donut_blur loss relative to Zernike loss.
         """
         super().__init__()
         self.save_hyperparameters()
         self.wavenet = WaveNet(
             cnn_model=cnn_model,
+            freeze_cnn=freeze_cnn,
             n_predictor_layers=n_predictor_layers,
         )
 
@@ -117,8 +141,8 @@ class WaveNetSystem(pl.LightningModule):
 
     def predict_step(
         self, batch: dict, batch_idx: int
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Predict Zernikes and return with truth."""
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Predict Zernikes and donut_blur, return with truth."""
         # unpack data from the dictionary
         img = batch["image"]
         fx = batch["field_x"]
@@ -126,27 +150,19 @@ class WaveNetSystem(pl.LightningModule):
         intra = batch["intrafocal"]
         band = batch["band"]
         zk_true = batch["zernikes"]
-        dof_true = batch["dof"]  # noqa: F841
+        blur_true = batch["donut_blur"]
 
-        # predict zernikes
-        zk_pred = self.wavenet(img, fx, fy, intra, band)
+        # predict zernikes and donut_blur
+        zk_pred, blur_pred = self.wavenet(img, fx, fy, intra, band)
 
-        return zk_pred, zk_true
+        return zk_pred, zk_true, blur_pred, blur_true
 
     def calc_losses(self, batch: dict, batch_idx: int) -> tuple:
-        """Predict Zernikes and calculate the losses.
+        """Predict Zernikes and donut_blur, calculate the losses."""
+        # predict zernikes and donut_blur
+        zk_pred, zk_true, blur_pred, blur_true = self.predict_step(batch, batch_idx)
 
-        The two losses considered are:
-        - loss - mean of the SSE + L2 penalty (in arcsec^2)
-        - mRSSE - mean of the root of the SSE (in arcsec)
-        where SSE = Sum of Squared Errors, and the mean is taken over the batch
-
-        The mRSSE provides an estimate of the PSF degradation.
-        """
-        # predict zernikes
-        zk_pred, zk_true = self.predict_step(batch, batch_idx)
-
-        # convert to FWHM contributions
+        # convert Zernikes to FWHM contributions
         zk_pred = convert_zernikes(zk_pred)
         zk_true = convert_zernikes(zk_true)
 
@@ -157,25 +173,35 @@ class WaveNetSystem(pl.LightningModule):
         # pull out the weights from the final linear layer
         *_, A, _ = self.wavenet.predictor.parameters()
 
-        # calculate loss
+        # calculate Zernike loss
         sse = F.mse_loss(zk_pred, zk_true, reduction="none").sum(dim=-1)
-        loss = sse.mean() + self.hparams.alpha * A.square().sum()
+        zk_loss = sse.mean() + self.hparams.alpha * A.square().sum()
         mRSSE = torch.sqrt(sse).mean()
 
-        return loss, mRSSE
+        # calculate donut_blur loss (simple MSE)
+        blur_loss = F.mse_loss(blur_pred.squeeze(), blur_true.squeeze())
+
+        # combined loss
+        loss = zk_loss + self.hparams.donut_blur_weight * blur_loss
+
+        return loss, zk_loss, blur_loss, mRSSE
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """Execute training step on a batch."""
-        loss, mRSSE = self.calc_losses(batch, batch_idx)
+        loss, zk_loss, blur_loss, mRSSE = self.calc_losses(batch, batch_idx)
         self.log("train_loss", loss, sync_dist=True, prog_bar=True)
+        self.log("train_zk_loss", zk_loss, sync_dist=True)
+        self.log("train_blur_loss", blur_loss, sync_dist=True)
         self.log("train_mRSSE", mRSSE, sync_dist=True)
 
         return loss
 
     def validation_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """Execute validation step on a batch."""
-        loss, mRSSE = self.calc_losses(batch, batch_idx)
+        loss, zk_loss, blur_loss, mRSSE = self.calc_losses(batch, batch_idx)
         self.log("val_loss", loss, sync_dist=True, prog_bar=True)
+        self.log("val_zk_loss", zk_loss, sync_dist=True)
+        self.log("val_blur_loss", blur_loss, sync_dist=True)
         self.log("val_mRSSE", mRSSE, sync_dist=True)
 
         return loss
@@ -203,99 +229,16 @@ class WaveNetSystem(pl.LightningModule):
         fy: torch.Tensor,
         focalFlag: torch.Tensor,
         band: torch.Tensor,
-    ) -> torch.Tensor:
-        """Predict zernikes for production.
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Predict zernikes and donut_blur for production."""
+        # transform the inputs
+        from ml_aos.utils import transform_inputs
 
-        This method assumes the inputs have NOT been previously
-        transformed by ml_aos.utils.transform_inputs.
-        """
-        # rescale image to [0, 1]
-        img -= img.min()
-        img /= img.max()
-
-        # normalize image
-        image_mean = 0.347
-        image_std = 0.226
-        img = (img - image_mean) / image_std
-
-        # convert angles to radians
-        fx *= torch.pi / 180
-        fy *= torch.pi / 180
-
-        # normalize angles
-        field_mean = 0.000
-        field_std = 0.021
-        fx = (fx - field_mean) / field_std
-        fy = (fy - field_mean) / field_std
-
-        # normalize the intrafocal flags
-        intra_mean = 0.5
-        intra_std = 0.5
-        focalFlag = (focalFlag - intra_mean) / intra_std
-
-        # get the effective wavelength in microns
-        band = {
-            1: torch.FloatTensor([[0.3671]]),
-            2: torch.FloatTensor([[0.4827]]),
-            3: torch.FloatTensor([[0.6223]]),
-            4: torch.FloatTensor([[0.7546]]),
-            5: torch.FloatTensor([[0.8691]]),
-            6: torch.FloatTensor([[0.9712]]),
-        }[band.item()]
-
-        # normalize the wavelength
-        band_mean = 0.710
-        band_std = 0.174
-        band = (band - band_mean) / band_std
-
-        # predict zernikes in microns
-        zk_pred = self.wavenet(img, fx, fy, focalFlag, band)
-
-        # convert to nanometers
-        zk_pred *= 1_000
-
-        return zk_pred
-
-
-class RealDonutLoader(pl.LightningDataModule):
-    """PyTorch Lightning wrapper for the real LSST AOS data."""
-
-    def __init__(
-        self,
-        batch_size: int = 64,
-        num_workers: int = 4,
-        persistent_workers: bool = True,
-        pin_memory: bool = True,
-        shuffle: bool = True,
-        **kwargs: Any,
-    ) -> None:
-        """Load the real LSST AOS data."""
-        super().__init__()
-        self.save_hyperparameters()
-
-    def _build_loader(
-        self, mode: str, shuffle: bool = False, drop_last: bool = True
-    ) -> DataLoader:
-        """Build a DataLoader"""
-        from ml_aos.real_data_loader import RealDonuts
-        return DataLoader(
-            RealDonuts(mode=mode, **self.hparams),
-            batch_size=self.hparams.batch_size,
-            num_workers=self.hparams.num_workers,
-            persistent_workers=self.hparams.persistent_workers,
-            pin_memory=self.hparams.pin_memory,
-            shuffle=shuffle,
-            drop_last=drop_last,
+        img, fx, fy, focalFlag, band = transform_inputs(
+            img, fx, fy, focalFlag, band
         )
 
-    def train_dataloader(self) -> DataLoader:
-        """Return the training DataLoader."""
-        return self._build_loader("train", shuffle=self.hparams.shuffle)
+        # predict zernikes and donut_blur
+        zk_pred, blur_pred = self.wavenet(img, fx, fy, focalFlag, band)
 
-    def val_dataloader(self) -> DataLoader:
-        """Return the validation DataLoader."""
-        return self._build_loader("val", drop_last=False)
-
-    def test_dataloader(self) -> DataLoader:
-        """Return the testing DataLoader."""
-        return self._build_loader("test", drop_last=False)
+        return zk_pred, blur_pred
