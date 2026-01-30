@@ -23,8 +23,8 @@ class WaveNet(nn.Module):
         freeze_cnn: bool, default=False
             Whether to freeze the CNN weights.
         n_predictor_layers: tuple, default=(256)
-            Number of nodes in the hidden layers of the Zernike predictor network.
-            This does not include the output layer, which is fixed to 19.
+            Number of nodes in the hidden layers of the predictor network.
+            Output layer predicts 22 values: 21 Zernikes + 1 donut_blur.
         """
         super().__init__()
 
@@ -46,7 +46,7 @@ class WaveNet(nn.Module):
             for param in self.cnn.parameters():
                 param.requires_grad = False
 
-        # create linear layers that predict zernikes
+        # create linear layers that predict zernikes + donut_blur
         n_meta_features = 4  # includes field_x, field_y, intra flag, wavelen
         n_features = self.n_cnn_features + n_meta_features
 
@@ -66,11 +66,11 @@ class WaveNet(nn.Module):
                     nn.ReLU(),
                 ]
 
-            # add the final layer
-            layers += [nn.Linear(n_predictor_layers[-1], 19)]
+            # add the final layer: 21 Zernikes + 1 donut_blur = 22 outputs
+            layers += [nn.Linear(n_predictor_layers[-1], 22)]
 
         else:
-            layers = [nn.Linear(n_features, 19)]
+            layers = [nn.Linear(n_features, 22)]
 
         self.predictor = nn.Sequential(*layers)
 
@@ -99,8 +99,8 @@ class WaveNet(nn.Module):
         fy: torch.Tensor,
         intra: torch.Tensor,
         band: torch.Tensor,
-    ) -> torch.Tensor:
-        """Predict Zernikes from donut image, location, and wavelength.
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Predict Zernikes and donut_blur from donut image, location, and wavelength.
 
         Parameters
         ----------
@@ -117,14 +117,17 @@ class WaveNet(nn.Module):
 
         Returns
         -------
-        torch.Tensor
-            Array of Zernike coefficients (Noll indices 4-23; microns)
+        tuple[torch.Tensor, torch.Tensor]
+            zernikes: Array of Zernike coefficients (Noll indices 4-24; microns), shape (batch, 21)
+            donut_blur: Seeing/blur value (arcsec), shape (batch, 1)
         """
-    
-
-        # predict zernikes from all features
+        # predict zernikes + donut_blur from all features
         image, cnn_features = self.predict_image_feature(image)
         features = torch.cat([cnn_features, fx, fy, intra, band], dim=1)
-        zernikes = self.predictor(features)
+        outputs = self.predictor(features)
+        
+        # Split output into Zernikes and donut_blur
+        zernikes = outputs[:, :21]
+        donut_blur = outputs[:, 21:22]
 
-        return zernikes
+        return zernikes, donut_blur
