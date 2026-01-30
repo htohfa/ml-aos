@@ -8,7 +8,7 @@ import torch
 from ml_aos.lightning import WaveNetSystem
 
 # Name of the file
-ckpt = "transfer_learning_unfrozen.ckpt"
+ckpt = "model_4to19_22to26_donutblur.ckpt"
 
 # load the checkpoint and convert it to torchscript
 script = WaveNetSystem.load_from_checkpoint(ckpt).to_torchscript()

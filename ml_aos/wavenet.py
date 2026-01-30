@@ -76,9 +76,6 @@ class WaveNet(nn.Module):
 
         self.predictor = nn.Sequential(*layers)
 
-        # Save Noll Indices for output Zernikes
-        self.nollIndices: list[int] = list(range(4, 23))
-
     def _reshape_image(self, image: torch.Tensor) -> torch.Tensor:
         """Add 3 identical channels to image tensor."""
         # add a channel dimension

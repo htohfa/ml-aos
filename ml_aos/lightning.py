@@ -139,7 +139,9 @@ class WaveNetSystem(pl.LightningModule):
 
         # save Noll indices for output Zernikes
         # (note type annotation is required for torchscript export)
-        self.nollIndices: torch.Tensor = torch.tensor(list(range(4, 16)) + [20, 21, 22])
+        self.nollIndices: torch.Tensor = torch.tensor(
+            list(range(4, 20)) + list(range(22, 27))
+        )
 
     def predict_step(
         self, batch: dict, batch_idx: int
