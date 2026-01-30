@@ -15,10 +15,11 @@ pl.seed_everything(42, workers=True)
 
 # create the model, dataloader, and trainer
 model = WaveNetSystem(
-    lr=0.0003,
+    lr=0.001,
     n_predictor_layers=(171, 57),
     lr_schedule=True,
-    alpha=0,
+    alpha=0.5,
+    donut_blur_weight=0.5,
 )
 
 data_loader = DonutLoader()
