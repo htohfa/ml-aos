@@ -51,11 +51,12 @@ class WaveNet(nn.Module):
         n_features = self.n_cnn_features + n_meta_features
 
         if len(n_predictor_layers) > 0:
-            # start with the very first layer
+            
             layers = [
                 nn.Linear(n_features, n_predictor_layers[0]),
                 nn.BatchNorm1d(n_predictor_layers[0]),
-                nn.ReLU(),
+                nn.GELU(),
+		nn.Dropout(0.1)
             ]
 
             # add any additional layers
@@ -63,7 +64,8 @@ class WaveNet(nn.Module):
                 layers += [
                     nn.Linear(n_predictor_layers[i - 1], n_predictor_layers[i]),
                     nn.BatchNorm1d(n_predictor_layers[i]),
-                    nn.ReLU(),
+                    nn.GELU(),
+			nn.Dropout(0.1),
                 ]
 
             # add the final layer: 21 Zernikes + 1 donut_blur = 22 outputs
@@ -131,3 +133,4 @@ class WaveNet(nn.Module):
         donut_blur = outputs[:, 21:22]
 
         return zernikes, donut_blur
+
