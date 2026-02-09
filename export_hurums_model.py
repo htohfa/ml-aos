@@ -8,7 +8,7 @@ import torch
 from ml_aos.lightning import WaveNetSystem
 
 # Name of the file
-ckpt = "model_new_coordinates.ckpt"
+ckpt = "epoch=5-step=309486.ckpt"
 
 # load the checkpoint and convert it to torchscript
 script = WaveNetSystem.load_from_checkpoint(ckpt).to_torchscript()
