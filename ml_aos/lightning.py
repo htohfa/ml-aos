@@ -137,10 +137,11 @@ class WaveNetSystem(pl.LightningModule):
             n_predictor_layers=n_predictor_layers,
         )
 
-        # define some parameters that will be accessed by
-        # the MachineLearningAlgorithm in ts_wep
-        self.camType = "LsstCam"
-        self.inputShape = (160, 160)
+        # save Noll indices for output Zernikes
+        # (note type annotation is required for torchscript export)
+        self.nollIndices: torch.Tensor = torch.tensor(
+            list(range(4, 20)) + list(range(22, 27))
+        )
 
     def predict_step(
         self, batch: dict, batch_idx: int
@@ -240,16 +241,57 @@ class WaveNetSystem(pl.LightningModule):
         fy: torch.Tensor,
         focalFlag: torch.Tensor,
         band: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Predict zernikes and donut_blur for production."""
-        # transform the inputs
-        from ml_aos.utils import transform_inputs
+    ) -> torch.Tensor:
+        """Predict zernikes and donut_blur for production.
 
-        img, fx, fy, focalFlag, band = transform_inputs(
-            img, fx, fy, focalFlag, band
+        This method assumes the inputs have NOT been previously
+        transformed by ml_aos.utils.transform_inputs.
+        """
+        # -> tuple[torch.Tensor, torch.Tensor]:
+        # rescale image to [0, 1]
+        img -= img.min()
+        img /= img.max()
+
+        # normalize image
+        image_mean = 0.347
+        image_std = 0.226
+        img = (img - image_mean) / image_std
+
+        # convert angles to radians
+        fx *= torch.pi / 180
+        fy *= torch.pi / 180
+
+        # normalize angles
+        field_mean = 0.000
+        field_std = 0.021
+        fx = (fx - field_mean) / field_std
+        fy = (fy - field_mean) / field_std
+
+        # normalize the intrafocal flags
+        intra_mean = 0.5
+        intra_std = 0.5
+        focalFlag = (focalFlag - intra_mean) / intra_std
+
+        # get the effective wavelength in microns
+        # Map band integers to their corresponding scalar values
+        band_map = torch.tensor(
+            [0.3671, 0.4827, 0.6223, 0.7546, 0.8691, 0.9712],
+            device=band.device,
         )
+        band = band_map[band.long().squeeze() - 1]
+        band = torch.atleast_2d(band).T
 
-        # predict zernikes and donut_blur
+        # normalize the wavelength
+        band_mean = 0.710
+        band_std = 0.174
+        band = (band - band_mean) / band_std
+
+        # predict zernikes in microns, and donut blur in arcseconds
         zk_pred, blur_pred = self.wavenet(img, fx, fy, focalFlag, band)
 
-        return zk_pred, blur_pred
+        # convert to meters
+        zk_pred /= 1e6
+
+        blur_pred = blur_pred.squeeze()
+
+        return zk_pred  # , blur_pred
