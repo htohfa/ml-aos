@@ -8,7 +8,7 @@ import torch
 from ml_aos.lightning import WaveNetSystem
 
 # Name of the file
-ckpt = "model_4to19_22to26_donutblur.ckpt"
+ckpt = "model_new_coordinates.ckpt"
 
 # load the checkpoint and convert it to torchscript
 script = WaveNetSystem.load_from_checkpoint(ckpt).to_torchscript()
@@ -16,7 +16,8 @@ script = WaveNetSystem.load_from_checkpoint(ckpt).to_torchscript()
 # get the output file path
 time_stamp = datetime.now(ZoneInfo("America/Los_Angeles"))
 name = (
-    "transfer_learning_unfrozen_"
+    ckpt.split(".ckpt")[0]
+    + "_"
     + str(time_stamp).split(".")[0].replace(" ", "_")
     + ".pt"
 )

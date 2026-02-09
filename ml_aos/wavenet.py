@@ -51,12 +51,11 @@ class WaveNet(nn.Module):
         n_features = self.n_cnn_features + n_meta_features
 
         if len(n_predictor_layers) > 0:
-            
             layers = [
                 nn.Linear(n_features, n_predictor_layers[0]),
                 nn.BatchNorm1d(n_predictor_layers[0]),
                 nn.GELU(),
-		nn.Dropout(0.1)
+                nn.Dropout(0.1),
             ]
 
             # add any additional layers
@@ -65,7 +64,7 @@ class WaveNet(nn.Module):
                     nn.Linear(n_predictor_layers[i - 1], n_predictor_layers[i]),
                     nn.BatchNorm1d(n_predictor_layers[i]),
                     nn.GELU(),
-			nn.Dropout(0.1),
+                    nn.Dropout(0.1),
                 ]
 
             # add the final layer: 21 Zernikes + 1 donut_blur = 22 outputs
@@ -86,30 +85,11 @@ class WaveNet(nn.Module):
 
         return image
 
-    def predict_image_feature(
-        self,
-        image: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Use the CNN to extract image features.
-
-        Parameters
-        ----------
-        image: torch.Tensor
-            The input image tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            The reshaped image tensor.
-        torch.Tensor
-            The extracted CNN features.
-        """
-        # reshape the image to have 3 channels
+    def predict_image_feature(self, image: torch.Tensor):
         image = self._reshape_image(image)
 
         # use cnn to extract image features
         cnn_features = self.cnn(image)
-
         return image, cnn_features
 
     def forward(
@@ -151,4 +131,3 @@ class WaveNet(nn.Module):
         donut_blur = outputs[:, 21:22]
 
         return zernikes, donut_blur
-

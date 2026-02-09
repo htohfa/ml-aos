@@ -241,12 +241,13 @@ class WaveNetSystem(pl.LightningModule):
         fy: torch.Tensor,
         focalFlag: torch.Tensor,
         band: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> torch.Tensor:
         """Predict zernikes and donut_blur for production.
 
         This method assumes the inputs have NOT been previously
         transformed by ml_aos.utils.transform_inputs.
         """
+        # -> tuple[torch.Tensor, torch.Tensor]:
         # rescale image to [0, 1]
         img -= img.min()
         img /= img.max()
@@ -277,7 +278,8 @@ class WaveNetSystem(pl.LightningModule):
             [0.3671, 0.4827, 0.6223, 0.7546, 0.8691, 0.9712],
             device=band.device,
         )
-        band = band_map[band.long().squeeze() - 1].unsqueeze(1)
+        band = band_map[band.long().squeeze() - 1]
+        band = torch.atleast_2d(band).T
 
         # normalize the wavelength
         band_mean = 0.710
@@ -290,10 +292,6 @@ class WaveNetSystem(pl.LightningModule):
         # convert to meters
         zk_pred /= 1e6
 
-        # remove the zernikes that were not trained on real data
-        idx = self.nollIndices - 4
-        zk_pred = zk_pred[:, idx]
-
         blur_pred = blur_pred.squeeze()
 
-        return zk_pred, blur_pred
+        return zk_pred  # , blur_pred
