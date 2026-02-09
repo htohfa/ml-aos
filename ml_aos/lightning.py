@@ -106,6 +106,7 @@ class WaveNetSystem(pl.LightningModule):
         lr: float = 1e-3,
         lr_schedule: bool = False,
         donut_blur_weight: float = 0.1,
+        defocus_weight: float = 2.0,  
     ) -> None:
         """Create the WaveNet.
 
@@ -125,6 +126,8 @@ class WaveNetSystem(pl.LightningModule):
             Whether to use the ReduceLROnPlateau learning rate scheduler.
         donut_blur_weight: float, default=0.1
             Weight for donut_blur loss relative to Zernike loss.
+        defocus_weight: float, default=2.0
+            Weight for defocus (Z4) loss. Set to 0.0 to disable.
         """
         super().__init__()
         self.save_hyperparameters()
@@ -163,45 +166,53 @@ class WaveNetSystem(pl.LightningModule):
         zk_pred, zk_true, blur_pred, blur_true = self.predict_step(batch, batch_idx)
 
         # convert Zernikes to FWHM contributions
-        zk_pred = convert_zernikes(zk_pred)
-        zk_true = convert_zernikes(zk_true)
+        zk_pred_weighted = convert_zernikes(zk_pred)
+        zk_true_weighted = convert_zernikes(zk_true)
 
-        mask = ~torch.isnan(zk_true)
-        zk_pred = zk_pred[mask]
-        zk_true = zk_true[mask]
+        mask = ~torch.isnan(zk_true_weighted)
+        zk_pred_masked = zk_pred_weighted[mask]
+        zk_true_masked = zk_true_weighted[mask]
 
         # pull out the weights from the final linear layer
         *_, A, _ = self.wavenet.predictor.parameters()
 
         # calculate Zernike loss
-        sse = F.mse_loss(zk_pred, zk_true, reduction="none").sum(dim=-1)
+        sse = F.mse_loss(zk_pred_masked, zk_true_masked, reduction="none").sum(dim=-1)
         zk_loss = sse.mean() + self.hparams.alpha * A.square().sum()
         mRSSE = torch.sqrt(sse).mean()
+
+        # calculate defocus loss (index 0 = Z4)
+        defocus_pred = zk_pred_weighted[:, 0]
+        defocus_true = zk_true_weighted[:, 0]
+        defocus_mask = ~torch.isnan(defocus_true)
+        defocus_loss = F.mse_loss(defocus_pred[defocus_mask], defocus_true[defocus_mask])
 
         # calculate donut_blur loss (simple MSE)
         blur_loss = F.mse_loss(blur_pred.squeeze(), blur_true.squeeze())
 
         # combined loss
-        loss = zk_loss + self.hparams.donut_blur_weight * blur_loss
+        loss = zk_loss + self.hparams.donut_blur_weight * blur_loss + self.hparams.defocus_weight * defocus_loss
 
-        return loss, zk_loss, blur_loss, mRSSE
+        return loss, zk_loss, blur_loss, defocus_loss, mRSSE
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """Execute training step on a batch."""
-        loss, zk_loss, blur_loss, mRSSE = self.calc_losses(batch, batch_idx)
+        loss, zk_loss, blur_loss, defocus_loss, mRSSE = self.calc_losses(batch, batch_idx)
         self.log("train_loss", loss, sync_dist=True, prog_bar=True)
         self.log("train_zk_loss", zk_loss, sync_dist=True)
         self.log("train_blur_loss", blur_loss, sync_dist=True)
+        self.log("train_defocus_loss", defocus_loss, sync_dist=True)
         self.log("train_mRSSE", mRSSE, sync_dist=True)
 
         return loss
 
     def validation_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """Execute validation step on a batch."""
-        loss, zk_loss, blur_loss, mRSSE = self.calc_losses(batch, batch_idx)
+        loss, zk_loss, blur_loss, defocus_loss, mRSSE = self.calc_losses(batch, batch_idx)
         self.log("val_loss", loss, sync_dist=True, prog_bar=True)
         self.log("val_zk_loss", zk_loss, sync_dist=True)
         self.log("val_blur_loss", blur_loss, sync_dist=True)
+        self.log("val_defocus_loss", defocus_loss, sync_dist=True)
         self.log("val_mRSSE", mRSSE, sync_dist=True)
 
         return loss
